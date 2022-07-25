@@ -33,7 +33,7 @@ public class SwiftFlutterAudioManagerPlugin: NSObject, FlutterPlugin {
               result(self.changeToBluetooth())
           }
           else if (call.method == "getAllOutputDevices") {
-              result(self.getAllOutputDevices);
+              result(self.getAllOutputDevices());
           }
           else {
               result("iOS " + UIDevice.current.systemVersion)
@@ -45,17 +45,17 @@ public class SwiftFlutterAudioManagerPlugin: NSObject, FlutterPlugin {
         var arr = [String]()
         let isConnectBLE = changeToBluetooth()
         if (isConnectBLE) {
-            arr.append("bluetooth");  //4
+            arr.append("Bluetooth");  //4
         }
-        
+
         let isConnectHeadphones = changeToHeadphones();
         if (isConnectHeadphones) {
-            arr.append("headphones");   //3
+            arr.append("Headset");   //3
         } else {
-            arr.append("receiver"); //1
+            arr.append("Receiver"); //1
         }
         
-        arr.append("speaker"); //2
+        arr.append("Speaker"); //2
         
         return arr;
     }
