@@ -1,6 +1,7 @@
 package com.yung.flutter_audio_manager;
 
 
+import android.app.Activity;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothHeadset;
@@ -30,7 +31,7 @@ import io.flutter.plugin.common.PluginRegistry.Registrar;
 /**
  * FlutterAudioManagerPlugin
  */
-public class FlutterAudioManagerPlugin implements FlutterPlugin, MethodCallHandler, BluetoothProfile.ServiceListener{
+public class FlutterAudioManagerPlugin implements FlutterPlugin, MethodCallHandler, BluetoothProfile.ServiceListener {
     private static final String TAG = "FlutterAudioManager";
     private static MethodChannel channel;
     private static AudioManager audioManager;
@@ -45,20 +46,22 @@ public class FlutterAudioManagerPlugin implements FlutterPlugin, MethodCallHandl
     public static final String AUDIO_TYPE_SPEAKER = "2";
     public static final String AUDIO_TYPE_SPEAKER_NAME = "Speaker";
 
-    public static final String AUDIO_TYPE_HEADSET= "3";
-    public static final String AUDIO_TYPE_HEADSET_NAME= "Headset";
+    public static final String AUDIO_TYPE_HEADSET = "3";
+    public static final String AUDIO_TYPE_HEADSET_NAME = "Headset";
 
-    public static final String AUDIO_TYPE_BLUETOOTH= "4";
-    public static final String AUDIO_TYPE_BLUETOOTH_NAME= "Bluetooth";
+    public static final String AUDIO_TYPE_BLUETOOTH = "4";
+    public static final String AUDIO_TYPE_BLUETOOTH_NAME = "Bluetooth";
 
-    private static int currentDeviceType=2;
+    private static int currentDeviceType = 2;
 
     private BluetoothAdapter bluetoothAdapter;
     private BluetoothHeadset bluetoothHeadset;
     private BluetoothDevice bluetoothDevice;
     private boolean isBluetoothConnected;
-    private static boolean hasHeadSet=false;  //有线耳机
+    private static boolean hasHeadSet = false;  //有线耳机
     private static boolean scoConnected = false;  //蓝牙
+
+    private boolean isInit = false;
 
     @Override
     public void onAttachedToEngine(@NonNull FlutterPluginBinding flutterPluginBinding) {
@@ -73,13 +76,6 @@ public class FlutterAudioManagerPlugin implements FlutterPlugin, MethodCallHandl
         activeContext = flutterPluginBinding.getApplicationContext();
         activeContext.registerReceiver(receiver, filter);
         audioManager = (AudioManager) activeContext.getSystemService(Context.AUDIO_SERVICE);
-
-        bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
-        if (bluetoothAdapter == null) {
-            Log.d(TAG, "bluetoothAdapter is null");
-            return;
-        }
-        bluetoothAdapter.getProfileProxy(activeContext, this, BluetoothProfile.HEADSET);
     }
 
 
@@ -99,19 +95,19 @@ public class FlutterAudioManagerPlugin implements FlutterPlugin, MethodCallHandl
             try {
                 switch (action) {
                     case CHANGE_TO_RECEIVER:
-                        currentDeviceType=1;
+                        currentDeviceType = 1;
                         //   changeToReceiver();
                         break;
                     case CHANGE_TO_SPEAKER:
-                        currentDeviceType=2;
+                        currentDeviceType = 2;
                         //  changeToSpeaker();
                         break;
                     case CHANGE_TO_HEADSET:
-                        currentDeviceType=3;
+                        currentDeviceType = 3;
                         //    changeToReceiver();
                         break;
                     case CHANGE_TO_BLUETOOTH:
-                        currentDeviceType=4;
+                        currentDeviceType = 4;
                         //  changeToBluetooth();
                         break;
                 }
@@ -124,16 +120,18 @@ public class FlutterAudioManagerPlugin implements FlutterPlugin, MethodCallHandl
 
         @Override
         public void onBlueChange(boolean isOpen) {
-            scoConnected=isOpen;
+            scoConnected = isOpen;
         }
 
     };
 
     @Override
     public void onMethodCall(@NonNull MethodCall call, @NonNull Result result) {
-        if (call.method.equals("getAllOutputDevices")) {
+        if (call.method.equals("initBlueSettings")) {
+            result.success(initBlueSettings());
+        } else if (call.method.equals("getAllOutputDevices")) {
             result.success(getAllOutputDevices());
-        }else if (call.method.equals("getCurrentOutput")) {
+        } else if (call.method.equals("getCurrentOutput")) {
             result.success(getCurrentOutput());
         } else if (call.method.equals("getAvailableInputs")) {
             result.success(getAvailableInputs());
@@ -148,6 +146,82 @@ public class FlutterAudioManagerPlugin implements FlutterPlugin, MethodCallHandl
         } else {
             result.notImplemented();
         }
+    }
+
+
+    public static Context getActiveContext() {
+        return activeContext;
+    }
+
+    private boolean initBlueSettings() {
+        if (Build.VERSION.SDK_INT >= 31) {
+            ArrayList<String> permissions = new ArrayList<>();
+            permissions.add("android.permission.BLUETOOTH_CONNECT");
+            PermissionUtils.requestPermissions(
+                    activeContext,
+                    (Activity) activeContext,
+                    permissions.toArray(new String[permissions.size()]), new PermissionUtils.Callback() {
+                        @Override
+                        public void invoke(String[] permissions, int[] grantResults) {
+                            for (int i = 0; i < permissions.length; ++i) {
+                                String permission = permissions[i];
+                                int grantResult = grantResults[i];
+                                if (grantResult == PackageManager.PERMISSION_GRANTED) {
+                                    getBlueService();
+                                    break;
+                                }
+                            }
+                        }
+                    });
+        } else {
+            getBlueService();
+        }
+        return isInit;
+    }
+
+
+    private void getBlueService() {
+        bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
+        if (bluetoothAdapter == null) {
+            Log.d(TAG, "bluetoothAdapter is null");
+            isInit = false;
+            return;
+        }
+        bluetoothAdapter.getProfileProxy(activeContext, new BluetoothProfile.ServiceListener() {
+            @Override
+            public void onServiceConnected(int profile, BluetoothProfile proxy) {
+                if (profile == BluetoothProfile.HEADSET) {
+                    Log.e(TAG, "AudioChangeReceiver onReceive BluetoothProfile onServiceConnected-----");
+                    bluetoothHeadset = (BluetoothHeadset) proxy;
+                    isBluetoothConnected = true;
+                    List<BluetoothDevice> devices = bluetoothHeadset.getConnectedDevices();
+                    if (devices.size() > 0) {
+                        bluetoothDevice = devices.get(0);
+                        currentDeviceType = 4;
+                        scoConnected = true;
+                        Log.e(TAG, "SCO connected with " + bluetoothDevice.getName());
+//                if (bluetoothHeadset.isAudioConnected(bluetoothDevice)) {
+//                } else {
+//                    Log.e(TAG, "SCO is not connected with " + bluetoothDevice.getName());
+//                }
+                    }
+                }
+            }
+
+            @Override
+            public void onServiceDisconnected(int profile) {
+                if (profile == BluetoothProfile.HEADSET) {
+                    Log.e(TAG, "AudioChangeReceiver onReceive BluetoothProfile onServiceDisconnected-----");
+//            audioManager.stopBluetoothSco();
+//            audioManager.setBluetoothScoOn(false);
+                    bluetoothHeadset = null;
+                    isBluetoothConnected = false;
+                    scoConnected = false;
+                    currentDeviceType = 1;
+                }
+            }
+        }, BluetoothProfile.HEADSET);
+        isInit = true;
     }
 
     /**
@@ -189,7 +263,6 @@ public class FlutterAudioManagerPlugin implements FlutterPlugin, MethodCallHandl
     }
 
 
-
     private static Boolean changeToHeadphones() {
         return changeToReceiver();
     }
@@ -208,10 +281,11 @@ public class FlutterAudioManagerPlugin implements FlutterPlugin, MethodCallHandl
         return true;
     }
 
-    private  List<String> newAudioDevices;
+    private List<String> newAudioDevices;
+
     private List<String> getAllOutputDevices() {
         newAudioDevices = new ArrayList<>();
-        if (scoConnected){
+        if (scoConnected) {
             newAudioDevices.add(AUDIO_TYPE_BLUETOOTH_NAME);
         }
         if (hasWiredHeadset()) {
@@ -248,7 +322,9 @@ public class FlutterAudioManagerPlugin implements FlutterPlugin, MethodCallHandl
     }
 
 
-    /** Gets the current earpiece state. */
+    /**
+     * Gets the current earpiece state.
+     */
     private boolean hasEarpiece() {
         return activeContext.getPackageManager().hasSystemFeature(PackageManager.FEATURE_TELEPHONY);
     }
@@ -272,16 +348,16 @@ public class FlutterAudioManagerPlugin implements FlutterPlugin, MethodCallHandl
 //        Log.e(TAG, "AudioChangeReceiver onReceive getCurrentOutput  info index is-----"+info.get(1));
 //        return info;
 
-        if(currentDeviceType==1){
+        if (currentDeviceType == 1) {
             info.add(AUDIO_TYPE_RECEIVER_NAME);
             info.add(AUDIO_TYPE_RECEIVER);
-        }else if(currentDeviceType==2){
+        } else if (currentDeviceType == 2) {
             info.add(AUDIO_TYPE_SPEAKER_NAME);
             info.add(AUDIO_TYPE_SPEAKER);
-        }else if(currentDeviceType==3){
+        } else if (currentDeviceType == 3) {
             info.add(AUDIO_TYPE_HEADSET_NAME);
             info.add(AUDIO_TYPE_HEADSET);
-        }else if(currentDeviceType==4){
+        } else if (currentDeviceType == 4) {
             info.add(AUDIO_TYPE_BLUETOOTH_NAME);
             info.add(AUDIO_TYPE_BLUETOOTH);
         }
@@ -335,7 +411,7 @@ public class FlutterAudioManagerPlugin implements FlutterPlugin, MethodCallHandl
             List<BluetoothDevice> devices = bluetoothHeadset.getConnectedDevices();
             if (devices.size() > 0) {
                 bluetoothDevice = devices.get(0);
-                currentDeviceType=4;
+                currentDeviceType = 4;
                 scoConnected = true;
                 Log.e(TAG, "SCO connected with " + bluetoothDevice.getName());
 //                if (bluetoothHeadset.isAudioConnected(bluetoothDevice)) {
@@ -355,7 +431,7 @@ public class FlutterAudioManagerPlugin implements FlutterPlugin, MethodCallHandl
             bluetoothHeadset = null;
             isBluetoothConnected = false;
             scoConnected = false;
-            currentDeviceType=1;
+            currentDeviceType = 1;
         }
     }
 

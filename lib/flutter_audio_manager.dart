@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/services.dart';
 
 enum AudioPort {
@@ -98,6 +99,9 @@ class FlutterAudioManager {
   }
 
   static void setListener(void Function() onInputChanged) {
+    if (Platform.isAndroid) {
+      _channel.invokeMethod('initBlueSettings');
+    }
     FlutterAudioManager._onInputChanged = onInputChanged;
     _channel.setMethodCallHandler(_methodHandle);
   }
