@@ -22,6 +22,8 @@ import java.util.Arrays;
 import java.util.List;
 
 import io.flutter.embedding.engine.plugins.FlutterPlugin;
+import io.flutter.embedding.engine.plugins.activity.ActivityAware;
+import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding;
 import io.flutter.plugin.common.MethodCall;
 import io.flutter.plugin.common.MethodChannel;
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler;
@@ -31,11 +33,12 @@ import io.flutter.plugin.common.PluginRegistry.Registrar;
 /**
  * FlutterAudioManagerPlugin
  */
-public class FlutterAudioManagerPlugin implements FlutterPlugin, MethodCallHandler, BluetoothProfile.ServiceListener {
+public class FlutterAudioManagerPlugin implements FlutterPlugin, ActivityAware, MethodCallHandler, BluetoothProfile.ServiceListener {
     private static final String TAG = "FlutterAudioManager";
     private static MethodChannel channel;
     private static AudioManager audioManager;
     private static Context activeContext;
+    private Activity activity;
 
     public static final String AUDIO_TYPE_NONE = "0";
     public static final String AUDIO_TYPE_NONE_NAME = "None";
@@ -58,16 +61,16 @@ public class FlutterAudioManagerPlugin implements FlutterPlugin, MethodCallHandl
     private BluetoothHeadset bluetoothHeadset;
     private BluetoothDevice bluetoothDevice;
     private boolean isBluetoothConnected;
-    private static boolean hasHeadSet = false;  //有线耳机
     private static boolean scoConnected = false;  //蓝牙
 
     private boolean isInit = false;
+    private AudioChangeReceiver receiver;
 
     @Override
     public void onAttachedToEngine(@NonNull FlutterPluginBinding flutterPluginBinding) {
         channel = new MethodChannel(flutterPluginBinding.getFlutterEngine().getDartExecutor(), "flutter_audio_manager");
         channel.setMethodCallHandler(new FlutterAudioManagerPlugin());
-        AudioChangeReceiver receiver = new AudioChangeReceiver(listener);
+        receiver = new AudioChangeReceiver(listener);
         IntentFilter filter = new IntentFilter();
         filter.addAction(Intent.ACTION_HEADSET_PLUG);
         filter.addAction(BluetoothHeadset.ACTION_CONNECTION_STATE_CHANGED);
@@ -77,6 +80,8 @@ public class FlutterAudioManagerPlugin implements FlutterPlugin, MethodCallHandl
         activeContext.registerReceiver(receiver, filter);
         audioManager = (AudioManager) activeContext.getSystemService(Context.AUDIO_SERVICE);
     }
+
+
 
 
     public static void registerWith(Registrar registrar) {
@@ -127,7 +132,9 @@ public class FlutterAudioManagerPlugin implements FlutterPlugin, MethodCallHandl
 
     @Override
     public void onMethodCall(@NonNull MethodCall call, @NonNull Result result) {
-        if (call.method.equals("initBlueSettings")) {
+        if (call.method.equals("stopBlueService")) {
+            result.success(stopBlueService());
+        }else if (call.method.equals("initBlueSettings")) {
             result.success(initBlueSettings());
         } else if (call.method.equals("getAllOutputDevices")) {
             result.success(getAllOutputDevices());
@@ -148,18 +155,13 @@ public class FlutterAudioManagerPlugin implements FlutterPlugin, MethodCallHandl
         }
     }
 
-
-    public static Context getActiveContext() {
-        return activeContext;
-    }
-
     private boolean initBlueSettings() {
         if (Build.VERSION.SDK_INT >= 31) {
             ArrayList<String> permissions = new ArrayList<>();
             permissions.add("android.permission.BLUETOOTH_CONNECT");
             PermissionUtils.requestPermissions(
                     activeContext,
-                    (Activity) activeContext,
+                    activity,
                     permissions.toArray(new String[permissions.size()]), new PermissionUtils.Callback() {
                         @Override
                         public void invoke(String[] permissions, int[] grantResults) {
@@ -167,6 +169,7 @@ public class FlutterAudioManagerPlugin implements FlutterPlugin, MethodCallHandl
                                 String permission = permissions[i];
                                 int grantResult = grantResults[i];
                                 if (grantResult == PackageManager.PERMISSION_GRANTED) {
+                                    Log.d(TAG, "getBlueService for 31...");
                                     getBlueService();
                                     break;
                                 }
@@ -174,6 +177,7 @@ public class FlutterAudioManagerPlugin implements FlutterPlugin, MethodCallHandl
                         }
                     });
         } else {
+            Log.d(TAG, "getBlueService...");
             getBlueService();
         }
         return isInit;
@@ -222,6 +226,30 @@ public class FlutterAudioManagerPlugin implements FlutterPlugin, MethodCallHandl
             }
         }, BluetoothProfile.HEADSET);
         isInit = true;
+    }
+
+
+    public boolean stopBlueService() {
+        Log.d(TAG, "stopBlueService...");
+        try{
+            if (bluetoothAdapter == null) {
+                return true;
+            }
+            if(null !=receiver){
+                activeContext.unregisterReceiver(receiver);
+            }
+            if (bluetoothHeadset != null) {
+                bluetoothAdapter.closeProfileProxy(BluetoothProfile.HEADSET, bluetoothHeadset);
+                bluetoothHeadset = null;
+            }
+            bluetoothAdapter = null;
+            bluetoothDevice = null;
+            Log.d(TAG, "stopBlueService done...");
+        }catch (Exception e){
+            Log.d(TAG, "stopBlueService Exception:"+e.getMessage());
+            return false;
+        }
+        return true;
     }
 
     /**
@@ -435,4 +463,24 @@ public class FlutterAudioManagerPlugin implements FlutterPlugin, MethodCallHandl
         }
     }
 
+    @Override
+    public void onAttachedToActivity(@NonNull ActivityPluginBinding binding) {
+        Log.d(TAG, "onAttachedToActivity");
+        activity=binding.getActivity();
+    }
+
+    @Override
+    public void onDetachedFromActivityForConfigChanges() {
+
+    }
+
+    @Override
+    public void onReattachedToActivityForConfigChanges(@NonNull ActivityPluginBinding binding) {
+
+    }
+
+    @Override
+    public void onDetachedFromActivity() {
+
+    }
 }
