@@ -21,16 +21,20 @@ public class SwiftFlutterAudioManagerPlugin: NSObject, FlutterPlugin {
               result(self.getAvailableInputs())
           }
           else if(call.method == "changeToSpeaker"){
-              result(self.changeToSpeaker())
+//              result(self.changeToSpeaker())
+              result(self.switchSpeaker())
           }
           else if(call.method == "changeToReceiver"){
-              result(self.changeToReceiver())
+//              result(self.changeToReceiver())
+              result(self.switchReceiver())
           }
           else if(call.method == "changeToHeadphones"){
-              result(self.changeToBluetooth())
+//              result(self.changeToHeadphones())
+              result(self.switchHeadphones())
           }
           else if(call.method == "changeToBluetooth"){
-              result(self.changeToBluetooth())
+//              result(self.changeToBluetooth())
+              result(self.switchBluetooth())
           }
           else if (call.method == "getAllOutputDevices") {
               result(self.getAllOutputDevices());
@@ -40,26 +44,28 @@ public class SwiftFlutterAudioManagerPlugin: NSObject, FlutterPlugin {
           }
       }
   }
-    
+
     func getAllOutputDevices() ->[String] {
         var arr = [String]()
-        let isConnectBLE = changeToBluetooth()
+
+        let bluetoothArr = [AVAudioSession.Port.bluetoothLE,AVAudioSession.Port.bluetoothHFP,AVAudioSession.Port.bluetoothA2DP];
+        let isConnectBLE = detectAvailableDevices(bluetoothArr);
         if (isConnectBLE) {
             arr.append("Bluetooth");  //4
         }
 
-        let isConnectHeadphones = changeToHeadphones();
+        let isConnectHeadphones = detectAvailableDevices([AVAudioSession.Port.headsetMic]);
         if (isConnectHeadphones) {
             arr.append("Headset");   //3
         } else {
             arr.append("Receiver"); //1
         }
-        
+
         arr.append("Speaker"); //2
-        
+
         return arr;
     }
-    
+
   func getCurrentOutput() -> [String]  {
         let currentRoute = AVAudioSession.sharedInstance().currentRoute
         for output in currentRoute.outputs {
@@ -67,7 +73,7 @@ public class SwiftFlutterAudioManagerPlugin: NSObject, FlutterPlugin {
         }
         return ["unknow","0"];
     }
-    
+
     func getAvailableInputs() -> [[String]]  {
         var arr = [[String]]()
         if let inputs = AVAudioSession.sharedInstance().availableInputs {
@@ -77,7 +83,7 @@ public class SwiftFlutterAudioManagerPlugin: NSObject, FlutterPlugin {
         }
         return arr;
     }
-    
+
     func getInfo(_ input:AVAudioSessionPortDescription) -> [String] {
         var type="0";
         let port = AVAudioSession.Port.self;
@@ -99,52 +105,140 @@ public class SwiftFlutterAudioManagerPlugin: NSObject, FlutterPlugin {
         }
         return [input.portName,type];
     }
-    
-    
-    func changeToSpeaker() -> Bool{
-        do {
-//            let session = AVAudioSession.sharedInstance()
-//            try session.setCategory(AVAudioSession.Category.playAndRecord, options: [AVAudioSession.CategoryOptions.defaultToSpeaker, AVAudioSession.CategoryOptions.allowBluetooth, AVAudioSession.CategoryOptions.duckOthers, AVAudioSession.CategoryOptions.mixWithOthers]);
-//            try session.setActive(true, options: AVAudioSession.SetActiveOptions.notifyOthersOnDeactivation)
 
-            let isConnectBLE = changeToBluetooth()
-            if(isConnectBLE == false) {
-                let session = AVAudioSession.sharedInstance()
-                try session.overrideOutputAudioPort(.speaker)
-            }
-            return true;
-        } catch {
-            return false;
-        }
+    func bluetoothAudioDevice() -> AVAudioSessionPortDescription? {
+        let arr = [AVAudioSession.Port.bluetoothLE, AVAudioSession.Port.bluetoothHFP, AVAudioSession.Port.bluetoothA2DP];
+        return self.audioDeviceFromTypes(arr);
     }
-        
-    
-    func changeToReceiver() -> Bool{
+
+    func builtinAudioDevice() -> AVAudioSessionPortDescription? {
+        let arr = [AVAudioSession.Port.builtInMic];
+        return self.audioDeviceFromTypes(arr);
+    }
+
+    func headphonesAudioDevice() -> AVAudioSessionPortDescription? {
+        let arr = [AVAudioSession.Port.headsetMic];
+        return self.audioDeviceFromTypes(arr);
+    }
+
+
+    func speakerAudioDevice() -> AVAudioSessionPortDescription? {
+        let arr = [AVAudioSession.Port.builtInSpeaker];
+        return self.audioDeviceFromTypes(arr);
+    }
+
+    func switchBluetooth() -> Bool {
         do {
-//            let session = AVAudioSession.sharedInstance()
-//            try session.setCategory(AVAudioSession.Category.playAndRecord, options: [AVAudioSession.CategoryOptions.allowBluetooth, AVAudioSession.CategoryOptions.duckOthers, AVAudioSession.CategoryOptions.mixWithOthers])
-//            try session.setActive(true, options: AVAudioSession.SetActiveOptions.notifyOthersOnDeactivation)
-            
-            let session = AVAudioSession.sharedInstance()
-            try session.overrideOutputAudioPort(.none)
-            
+            try AVAudioSession.sharedInstance().setPreferredInput(self.bluetoothAudioDevice());
             return true;
         } catch {
             return false;
         }
+
+        return false;
     }
-    
-    
-    func changeToHeadphones() -> Bool{
-        return changeByPortType([AVAudioSession.Port.headsetMic])
+
+    func switchHeadphones() -> Bool {
+        do {
+            try AVAudioSession.sharedInstance().setPreferredInput(self.headphonesAudioDevice());
+            return true;
+        } catch {
+            return false;
+        }
+
+        return false;
     }
-    
-    func changeToBluetooth() -> Bool{
-        let arr = [AVAudioSession.Port.bluetoothLE,AVAudioSession.Port.bluetoothHFP,AVAudioSession.Port.bluetoothA2DP];
-        return changeByPortType(arr)
+
+
+    func switchSpeaker() -> Bool {
+        do {
+            let session = AVAudioSession.sharedInstance()
+            try session.overrideOutputAudioPort(.speaker)
+            return true;
+        } catch {
+            return false;
+        }
+
+        return false;
     }
-    
-    func changeByPortType(_ ports:[AVAudioSession.Port]) -> Bool{
+
+    func switchReceiver() -> Bool {
+        do {
+            try AVAudioSession.sharedInstance().setPreferredInput(self.builtinAudioDevice());
+            return true;
+        } catch {
+            return false;
+        }
+
+        return false;
+    }
+
+
+    func audioDeviceFromTypes(_ ports:[AVAudioSession.Port]) -> AVAudioSessionPortDescription? {
+        guard let inputs = AVAudioSession.sharedInstance().availableInputs else {
+            return nil;
+        }
+
+        for input in inputs {
+            if (ports.contains(input.portType)) {
+                return input;
+            }
+         }
+
+        return nil;
+    }
+
+
+//    func changeToSpeaker() -> Bool{
+//        do {
+//            let session = AVAudioSession.sharedInstance()
+//            try session.overrideOutputAudioPort(.speaker)
+//            return true;
+//        } catch {
+//            return false;
+//        }
+//    }
+//
+//
+//    func changeToReceiver() -> Bool{
+//        do {
+//            let session = AVAudioSession.sharedInstance()
+//            try session.overrideOutputAudioPort(.none)
+//            return true;
+//        } catch {
+//            return false;
+//        }
+//    }
+//
+//
+//    func changeToHeadphones() -> Bool{
+//        return changeByPortType([AVAudioSession.Port.headsetMic])
+//    }
+//
+//    func changeToBluetooth() -> Bool{
+//        let arr = [AVAudioSession.Port.bluetoothLE,AVAudioSession.Port.bluetoothHFP,AVAudioSession.Port.bluetoothA2DP];
+//        return changeByPortType(arr)
+//    }
+//
+//    func changeByPortType(_ ports:[AVAudioSession.Port]) -> Bool{
+//        let currentRoute = AVAudioSession.sharedInstance().currentRoute
+//        for output in currentRoute.outputs {
+//            if(ports.firstIndex(of: output.portType) != nil){
+//                return true;
+//            }
+//        }
+//        if let inputs = AVAudioSession.sharedInstance().availableInputs {
+//            for input in inputs {
+//                if(ports.firstIndex(of: input.portType) != nil){
+//                    try?AVAudioSession.sharedInstance().setPreferredInput(input);
+//                    return true;
+//                }
+//             }
+//        }
+//        return false;
+//    }
+
+    func detectAvailableDevices(_ ports:[AVAudioSession.Port]) -> Bool {
         let currentRoute = AVAudioSession.sharedInstance().currentRoute
         for output in currentRoute.outputs {
             if(ports.firstIndex(of: output.portType) != nil){
@@ -154,19 +248,19 @@ public class SwiftFlutterAudioManagerPlugin: NSObject, FlutterPlugin {
         if let inputs = AVAudioSession.sharedInstance().availableInputs {
             for input in inputs {
                 if(ports.firstIndex(of: input.portType) != nil){
-                    try?AVAudioSession.sharedInstance().setPreferredInput(input);
                     return true;
                 }
              }
         }
         return false;
     }
-    
+
+
     public override init() {
         super.init()
         registerAudioRouteChangeBlock()
     }
-    
+
     func registerAudioRouteChangeBlock(){
         NotificationCenter.default.addObserver( forName:AVAudioSession.routeChangeNotification, object: AVAudioSession.sharedInstance(), queue: nil) { notification in
             guard let userInfo = notification.userInfo,
@@ -178,4 +272,6 @@ public class SwiftFlutterAudioManagerPlugin: NSObject, FlutterPlugin {
         }
     }
 }
+
+
 
