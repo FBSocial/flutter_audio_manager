@@ -156,6 +156,18 @@ public class FlutterAudioManagerPlugin implements FlutterPlugin, ActivityAware, 
     }
 
     private boolean initBlueSettings() {
+        if(null !=audioManager){
+            if (audioManager.isBluetoothScoOn() ) {
+                currentDeviceType = 4;
+            } else if (audioManager.isWiredHeadsetOn()) {
+                currentDeviceType = 3;
+            } else if (audioManager.isSpeakerphoneOn()) {
+                currentDeviceType = 2;
+            } else {
+                currentDeviceType = 1;
+            }
+            Log.d(TAG, "initBlueSettings currentDeviceType is:"+currentDeviceType);
+        }
         if (Build.VERSION.SDK_INT >= 31) {
             ArrayList<String> permissions = new ArrayList<>();
             permissions.add("android.permission.BLUETOOTH_CONNECT");
@@ -221,7 +233,7 @@ public class FlutterAudioManagerPlugin implements FlutterPlugin, ActivityAware, 
                     bluetoothHeadset = null;
                     isBluetoothConnected = false;
                     scoConnected = false;
-                    currentDeviceType = 1;
+                    currentDeviceType = 2;
                 }
             }
         }, BluetoothProfile.HEADSET);
@@ -292,7 +304,12 @@ public class FlutterAudioManagerPlugin implements FlutterPlugin, ActivityAware, 
 
 
     private static Boolean changeToHeadphones() {
-        return changeToReceiver();
+        audioManager.setMode(AudioManager.MODE_IN_COMMUNICATION);
+        audioManager.stopBluetoothSco();
+        audioManager.setBluetoothScoOn(false);
+        audioManager.setSpeakerphoneOn(false);
+        listener.onChanged(AudioEventListener.CHANGE_TO_HEADSET);
+        return true;
     }
 
     /**
