@@ -1,0 +1,10 @@
+{
+  "module": {
+    "name": "flutter_audio_manager",
+    "type": "har",
+    "deviceTypes": [
+      "default",
+      "tablet"
+    ]
+  }
+}
