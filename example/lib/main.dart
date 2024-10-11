@@ -12,6 +12,7 @@ class MyApp extends StatefulWidget {
 class _MyAppState extends State<MyApp> {
   AudioInput _currentInput = AudioInput("unknow", 0);
   List<AudioInput> _availableInputs = [];
+  List<AudioInput> _allOutputDevices = [];
 
   @override
   void initState() {
@@ -36,6 +37,8 @@ class _MyAppState extends State<MyApp> {
     print("current:$_currentInput");
     _availableInputs = await FlutterAudioManager.getAvailableInputs();
     print("available $_availableInputs");
+    _allOutputDevices = await FlutterAudioManager.getAllOutputDevices();
+    print("all output $_allOutputDevices");
   }
 
   @override
@@ -50,7 +53,8 @@ class _MyAppState extends State<MyApp> {
                 Text(
                   "current output:${_currentInput.name} ${_currentInput.port}",
                 ),
-                Divider(),
+                const Divider(color: Colors.blue, height: 2),
+                Text("Available Inputs:"),
                 Expanded(
                   child: ListView.builder(
                     itemBuilder: (_, index) {
@@ -65,6 +69,22 @@ class _MyAppState extends State<MyApp> {
                     itemCount: _availableInputs.length,
                   ),
                 ),
+                const Divider(color: Colors.blue, height: 2),
+                Text("All Outpus:"),
+                Expanded(
+                  child: ListView.builder(
+                    itemBuilder: (_, index) {
+                      AudioInput input = _allOutputDevices[index];
+                      return Row(
+                        children: <Widget>[
+                          Expanded(child: Text("${input.name}")),
+                          Expanded(child: Text("${input.port}")),
+                        ],
+                      );
+                    },
+                    itemCount: _allOutputDevices.length,
+                  ),
+                ), 
               ],
             ),
           ),
